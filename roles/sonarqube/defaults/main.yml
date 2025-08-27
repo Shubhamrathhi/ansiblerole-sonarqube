@@ -1,0 +1,3 @@
+---
+sonarqube_version: "lts"
+sonarqube_port: 9000

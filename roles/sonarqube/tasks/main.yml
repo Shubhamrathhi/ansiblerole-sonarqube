@@ -38,31 +38,43 @@
     published_ports:
       - "9000:9000"
 
----
-- name: Install Java (required for Jenkins)
-  ansible.builtin.apt:
-    name: openjdk-11-jdk
-    state: present
-    update_cache: yes
+- name: Create Jenkins home directory
+  ansible.builtin.file:
+    path: /opt/jenkins_home
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: '0755'
 
-- name: Add Jenkins GPG key
-  ansible.builtin.apt_key:
-    url: https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
-    state: present
+- name: Pull Jenkins Docker image
+  community.docker.docker_image:
+    name: jenkins/jenkins
+    tag: lts
+    source: pull
 
-- name: Add Jenkins repository
-  ansible.builtin.apt_repository:
-    repo: "deb https://pkg.jenkins.io/debian-stable binary/"
-    state: present
-
-- name: Install Jenkins
-  ansible.builtin.apt:
+- name: Run Jenkins container
+  community.docker.docker_container:
     name: jenkins
-    state: present
-    update_cache: yes
-
-- name: Enable and start Jenkins service
-  ansible.builtin.service:
-    name: jenkins
+    image: jenkins/jenkins:lts
     state: started
-    enabled: yes
+    restart_policy: always
+    published_ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - /opt/jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+
+- name: Wait for Jenkins to initialize
+  ansible.builtin.wait_for:
+    path: /opt/jenkins_home/secrets/initialAdminPassword
+    timeout: 60
+
+- name: Get Jenkins initial admin password
+  ansible.builtin.command: docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
+  register: jenkins_password
+  changed_when: false
+
+- name: Show Jenkins initial admin password
+  ansible.builtin.debug:
+    msg: "Jenkins initial admin password is: {{ jenkins_password.stdout }}"
